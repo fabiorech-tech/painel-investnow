@@ -165,7 +165,9 @@
   const NOMES_TD = { "Tesouro Selic": "Selic", "Tesouro Prefixado": "Prefixado", "Tesouro Prefixado com Juros Semestrais": "Prefixado com juros", "Tesouro IPCA+": "IPCA+", "Tesouro IPCA+ com Juros Semestrais": "IPCA+ com juros" };
   function quadroTesouro() {
     const ts = est.tesouro;
-    const q = novoQuadro("Tesouro Direto", ts.length ? `Fechamento ${ts[0].data.slice(0, 5)}` : "Fechamento", "q-tesouro");
+    const vivo = ts.length && ts[0].aoVivo;
+    const selo = !ts.length ? "Tesouro Direto" : vivo ? `Hoje ${ts[0].hora}` : `Fechamento ${ts[0].data.slice(0, 5)}`;
+    const q = novoQuadro("Tesouro Direto", selo, "q-tesouro");
     if (!ts.length) { q.insertAdjacentHTML("beforeend", `<p class="mudo">Carregando taxas…</p>`); return q; }
     let html = `<div class="linha-cab rotulo"><span>Título</span><span class="dir">Taxa</span><span class="dir">Dia</span></div>`;
     let grupo = "";
@@ -174,9 +176,9 @@
       const d = t.taxa != null && t.taxaAnterior != null ? t.taxa - t.taxaAnterior : null;
       const sel = t.tipo === "Tesouro Selic" ? "Selic + " : t.tipo.startsWith("Tesouro IPCA") ? "IPCA + " : "";
       html += `<div class="linha-info"><span class="nm"><b class="num">${esc(t.vencimento.slice(6))}</b><span>vence ${esc(t.vencimento)} · R$ ${fmtN(t.pu)}</span></span>
-        <span class="num dir">${sel}${fmtN(t.taxa)}%</span><span class="chip ${tom(-(d || 0))}">${d == null ? "—" : fmtBp(d)}</span></div>`;
+        <span class="num dir">${sel}${fmtN(t.taxa, t.tipo === "Tesouro Selic" ? 4 : 2)}%</span><span class="chip ${tom(-(d || 0))}">${d == null ? "—" : fmtBp(d)}</span></div>`;
     }
-    q.insertAdjacentHTML("beforeend", `<div class="linhas">${html}</div><p class="nota">Taxa de compra do Tesouro Direto no último fechamento. Taxa em queda deixa o título mais caro.</p>`);
+    q.insertAdjacentHTML("beforeend", `<div class="linhas">${html}</div><p class="nota">${vivo ? `Taxa de compra no site do Tesouro Direto, atualizada às ${esc(ts[0].hora)}. O Tesouro revisa as taxas algumas vezes por pregão. Dia = diferença contra o último fechamento.` : "Taxa de compra do Tesouro Direto no último fechamento."} Taxa em queda deixa o título mais caro.</p>`);
     return q;
   }
   const fmtBp = (d) => (d > 0 ? "+" : d < 0 ? "−" : "") + fmtN(Math.abs(d), 2) + " p.p.";
@@ -663,7 +665,8 @@
     setInterval(() => { if (!document.hidden && est.sessao) carregarRegistros(); }, 60_000);
     setInterval(() => { if (!document.hidden && est.decisoes.length) desenharDecisoes(); }, 5_000);
     setInterval(() => { if (!document.hidden && est.sessao) buscarNoticias(); }, 5 * 60_000);
-    setInterval(() => { if (est.sessao) { buscarIndicadores(); buscarTesouro(); } }, 60 * 60_000);
+    setInterval(() => { if (est.sessao) buscarIndicadores(); }, 60 * 60_000);
+    setInterval(() => { if (!document.hidden && est.sessao) buscarTesouro(); }, 5 * 60_000);
   }
 
   setInterval(() => {

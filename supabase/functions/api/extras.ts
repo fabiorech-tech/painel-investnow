@@ -142,7 +142,7 @@ export function noticias(): Promise<Noticia[]> {
 // O arquivo é grande (~15 MB) e vem com os dias mais recentes no topo: lemos só o começo.
 export type Titulo = {
   tipo: string; vencimento: string; taxa: number | null; taxaAnterior: number | null;
-  pu: number | null; data: string;
+  pu: number | null; data: string; aoVivo?: boolean; hora?: string;
 };
 const TESOURO_CSV =
   "https://www.tesourotransparente.gov.br/ckan/dataset/df56aa42-484a-4a59-8184-7676580c81e3/resource/796d2059-14e9-44e3-80c9-2d9e30b405c1/download/PrecoTaxaTesouroDireto.csv";
@@ -150,7 +150,7 @@ const TIPOS = ["Tesouro Selic", "Tesouro Prefixado", "Tesouro Prefixado com Juro
 const num = (s: string) => (s ? Number(s.replace(".", "").replace(",", ".")) : null);
 const ymd = (d: string) => d.split("/").reverse().join("");
 
-export function tesouro(): Promise<Titulo[]> {
+function tesouroFechamento(): Promise<Titulo[]> {
   return cached("tesouro", 3 * 3_600_000, async () => {
     const r = await fetch(TESOURO_CSV, { headers: UA });
     if (!r.ok || !r.body) throw new Error(`Tesouro ${r.status}`);
@@ -173,5 +173,40 @@ export function tesouro(): Promise<Titulo[]> {
       .filter((c) => c[2] === hoje && TIPOS.includes(c[0]))
       .map((c) => ({ tipo: c[0], vencimento: c[1], taxa: num(c[3]), taxaAnterior: ant.get(`${c[0]}|${c[1]}`) ?? null, pu: num(c[5]), data: c[2] }))
       .sort((a, b) => TIPOS.indexOf(a.tipo) - TIPOS.indexOf(b.tipo) || ymd(a.vencimento).localeCompare(ymd(b.vencimento)));
+  });
+}
+
+// Taxas do dia, como aparecem no site do Tesouro Direto (atualizadas algumas vezes por pregão).
+// Só os títulos à venda das famílias Selic, Prefixado e IPCA+. Variação contra o último fechamento.
+const TD_AO_VIVO = "https://www.tesourodireto.com.br/o/rentabilidade/investir";
+const UA_NAV = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120 Safari/537.36", Accept: "application/json" };
+const taxaDe = (s: string) => { const m = String(s ?? "").match(/(-?[\d.]+,\d+)%?\s*$/); return m ? num(m[1]) : null; };
+
+export function tesouro(): Promise<Titulo[]> {
+  return cached("tesouro-vivo", 5 * 60_000, async () => {
+    const fechamento = await tesouroFechamento().catch(() => [] as Titulo[]);
+    try {
+      const r = await fetch(TD_AO_VIVO, { headers: UA_NAV });
+      if (!r.ok) throw new Error(`TD ${r.status}`);
+      const j = await r.json();
+      const ant = new Map(fechamento.map((t) => [`${t.tipo}|${t.vencimento}`, t.taxa]));
+      // deno-lint-ignore no-explicit-any
+      const lista: Titulo[] = (j?.TesouroLegado ?? []).map((x: any) => {
+        const nome = String(x.treasuryBondName ?? "");
+        const tipo = nome.replace(/\s+\d{4}$/, "");
+        const [y, m, d] = String(x.maturityDate ?? "").slice(0, 10).split("-");
+        const venc = `${d}/${m}/${y}`;
+        const quando = String(x.lastMarketPricingDate ?? "");
+        const [dy, dm, dd] = quando.slice(0, 10).split("-");
+        return {
+          tipo, vencimento: venc, taxa: taxaDe(x.investmentProfitabilityIndexerName),
+          taxaAnterior: ant.get(`${tipo}|${venc}`) ?? null, pu: Number(x.unitaryInvestmentValue) || null,
+          data: `${dd}/${dm}/${dy}`, hora: quando.slice(11, 16), aoVivo: true,
+        };
+      }).filter((t: Titulo) => TIPOS.includes(t.tipo) && t.taxa != null)
+        .sort((a: Titulo, b: Titulo) => TIPOS.indexOf(a.tipo) - TIPOS.indexOf(b.tipo) || ymd(a.vencimento).localeCompare(ymd(b.vencimento)));
+      if (lista.length) return lista;
+    } catch (_e) { /* cai para o último fechamento */ }
+    return fechamento;
   });
 }
