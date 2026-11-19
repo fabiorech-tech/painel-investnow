@@ -615,8 +615,18 @@
   }
   function mostrarSenha(login, senha) {
     const el = $("#u-senha-msg");
-    el.innerHTML = `Acesso de <b>${esc(login)}</b>: senha provisória <span class="senha-temp">${esc(senha)}</span>. Envie para a pessoa junto com o link do painel. Ela troca a senha no primeiro acesso. Esta senha não aparece de novo.`;
+    const link = location.origin + location.pathname;
+    const msg = `Seu acesso ao Painel InvestNow:\n${link}\nUsuário: ${login}\nSenha provisória: ${senha}\nNo primeiro acesso o painel pede para você criar sua própria senha.`;
+    el.innerHTML = `<div><span class="rotulo">Acesso criado para ${esc(login)}</span>
+      <div class="senha-linha">Usuário <b>${esc(login)}</b> · Senha provisória <span class="senha-temp">${esc(senha)}</span></div>
+      <span class="nota">Envie para a pessoa junto com o link. Ela troca a senha no primeiro acesso. Esta senha não aparece de novo.</span></div>
+      <button type="button" class="btn btn-primario btn-p" id="u-copiar">Copiar mensagem para enviar</button>`;
     el.hidden = false;
+    $("#u-copiar").onclick = async () => {
+      try { await navigator.clipboard.writeText(msg); aviso("Mensagem copiada. Cole no WhatsApp ou e-mail."); }
+      catch { prompt("Copie a mensagem:", msg.replace(/\n/g, " | ")); }
+    };
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   $("#form-usuario").addEventListener("submit", async (e) => {
     e.preventDefault();

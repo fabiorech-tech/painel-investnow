@@ -231,3 +231,8 @@ input:focus, select:focus { border-color: var(--brand); outline: none; box-shado
 .senha-temp { font-family: var(--mono); background: var(--brand-bg); color: var(--brand); padding: 2px 8px; border-radius: var(--r-sm); user-select: all; }
 .equipe-lista .nm .etiqueta { display: inline-block; font-size: 11px; color: var(--brand); }
 .equipe-lista .nm .etiqueta.off { color: var(--ink-muted); }
+.senha-caixa { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); flex-wrap: wrap; border: 1.5px solid var(--brand); background: var(--brand-bg); border-radius: var(--r-md); padding: var(--s4); }
+.senha-caixa > div { display: grid; gap: 6px; }
+.senha-caixa .rotulo { color: var(--brand); }
+.senha-linha { font-size: 16px; line-height: 24px; color: var(--ink); }
+.senha-caixa .senha-temp { font-size: 18px; font-weight: 600; letter-spacing: .04em; padding: 2px 10px; }
