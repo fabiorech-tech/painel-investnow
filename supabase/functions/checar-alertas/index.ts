@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
   const resultados: unknown[] = [];
   const pendentes = (alertas as Alerta[] ?? []).filter(podeDisparar);
   const simbolos = [...new Set(pendentes.filter((a) => !a.simbolo.startsWith("TD|")).map((a) => a.simbolo))].filter((x) => porSimbolo.has(x));
-  const titulos = pendentes.some((a) => a.simbolo.startsWith("TD|")) ? await tesouro().catch(() => [] as Titulo[]) : [];
+  // Tesouro: confere a cada 5 minutos (o Tesouro só revisa as taxas algumas vezes por pregão).
+  const titulos = pendentes.some((a) => a.simbolo.startsWith("TD|")) && new Date().getMinutes() % 5 === 0 ? await tesouro().catch(() => [] as Titulo[]) : [];
   const porTitulo = new Map(titulos.map((t) => [`TD|${t.tipo}|${t.vencimento}`, t]));
   const cotacoes = new Map(
     await Promise.all(simbolos.map(async (s) => [s, await cotacao(porSimbolo.get(s)!)] as const)),
