@@ -4,32 +4,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Painel InvestNow</title>
-<meta name="theme-color" content="#f6f3ec">
+<meta name="theme-color" content="#00130F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f5c43'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EI%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2300130F'/%3E%3Crect x='6' y='17' width='5' height='9' rx='2.5' fill='%237AF1AF'/%3E%3Crect x='13.5' y='11' width='5' height='15' rx='2.5' fill='%237AF1AF'/%3E%3Crect x='21' y='5' width='5' height='21' rx='2.5' fill='%237AF1AF'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
 
 <section id="tela-login" class="login" hidden>
   <form id="form-login" class="login-caixa">
-    <p class="marca">InvestNow</p>
+    <p><span class="marca"><svg viewBox="0 0 30 28" aria-hidden="true"><rect x="0" y="16" width="7" height="12" rx="3.5" fill="#7AF1AF"/><rect x="11.5" y="8" width="7" height="20" rx="3.5" fill="#7AF1AF"/><rect x="23" y="0" width="7" height="28" rx="3.5" fill="#7AF1AF"/></svg><span class="marca-texto">invest <b>now</b></span></span></p>
     <p class="mudo">Painel de observação do escritório</p>
-    <label for="codigo" class="rotulo">Código de acesso</label>
-    <input id="codigo" autocomplete="current-password" spellcheck="false" required>
+    <label for="login" class="rotulo">Usuário</label>
+    <input id="login" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <label for="senha" class="rotulo">Senha</label>
+    <input id="senha" type="password" autocomplete="current-password" required>
     <button type="submit" class="btn btn-primario">Entrar</button>
     <p id="login-erro" class="erro" hidden></p>
+  </form>
+  <form id="form-nova-senha" class="login-caixa" hidden>
+    <p><span class="marca"><svg viewBox="0 0 30 28" aria-hidden="true"><rect x="0" y="16" width="7" height="12" rx="3.5" fill="#7AF1AF"/><rect x="11.5" y="8" width="7" height="20" rx="3.5" fill="#7AF1AF"/><rect x="23" y="0" width="7" height="28" rx="3.5" fill="#7AF1AF"/></svg><span class="marca-texto">invest <b>now</b></span></span></p>
+    <h2>Crie sua senha</h2>
+    <p class="mudo">Primeiro acesso: troque a senha provisória por uma só sua, com pelo menos 8 caracteres.</p>
+    <label for="nova-senha" class="rotulo">Nova senha</label>
+    <input id="nova-senha" type="password" autocomplete="new-password" minlength="8" required>
+    <label for="nova-senha2" class="rotulo">Repita a nova senha</label>
+    <input id="nova-senha2" type="password" autocomplete="new-password" minlength="8" required>
+    <button type="submit" class="btn btn-primario">Salvar e entrar</button>
+    <p id="nova-senha-erro" class="erro" hidden></p>
   </form>
 </section>
 
 <div id="app" hidden>
   <header class="topo">
-    <div class="topo-marca"><span class="marca">InvestNow</span><span class="rotulo">Painel</span></div>
+    <div class="topo-marca"><span class="marca"><svg viewBox="0 0 30 28" aria-hidden="true"><rect x="0" y="16" width="7" height="12" rx="3.5" fill="#7AF1AF"/><rect x="11.5" y="8" width="7" height="20" rx="3.5" fill="#7AF1AF"/><rect x="23" y="0" width="7" height="28" rx="3.5" fill="#7AF1AF"/></svg><span class="marca-texto">invest <b>now</b></span></span><span class="rotulo">Painel</span></div>
     <div class="topo-status">
       <span id="st-binance" class="fonte-st" title="Cripto e câmbio">Binance ao vivo</span>
       <span id="st-atraso" class="fonte-st" title="B3, EUA, commodities e juros">Cotações com atraso</span>
       <span id="relogio" class="relogio num"></span>
+      <span id="usuario-topo" class="usuario-topo"></span>
+      <button id="minha-senha" class="btn btn-fantasma btn-p" type="button">Trocar senha</button>
       <button id="sair" class="btn btn-fantasma btn-p" type="button">Sair</button>
     </div>
   </header>
@@ -78,6 +93,7 @@
         <button type="button" role="tab" data-aba="alertas">Alertas</button>
         <button type="button" role="tab" data-aba="disparos">Disparados</button>
         <button type="button" role="tab" data-aba="ativos">Ativos</button>
+        <button type="button" role="tab" data-aba="equipe" hidden>Equipe</button>
       </nav>
 
       <section id="aba-decisoes" class="aba">
@@ -88,7 +104,6 @@
           <div class="campo"><label for="d-preco">Preço</label><input id="d-preco" inputmode="decimal" required></div>
           <div class="campo"><label for="d-qtd">Quantidade</label><input id="d-qtd" inputmode="decimal" required></div>
           <div class="campo campo-largo"><label for="d-motivo">Motivo</label><input id="d-motivo" maxlength="1000" placeholder="Ex.: rompeu resistência com volume"></div>
-          <div class="campo"><label for="d-autor">Quem decidiu</label><input id="d-autor" maxlength="60"></div>
           <div class="campo-botoes">
             <button type="submit" class="btn btn-primario">Salvar decisão</button>
             <button type="button" class="btn btn-fantasma" data-fechar>Cancelar</button>
@@ -154,6 +169,18 @@
         </form>
         <p class="nota">Ação da B3: o código (PETR4). EUA: o ticker (TSLA). Cripto: a sigla (ADA). Câmbio: o par da Binance (USDTBRL). Commodities: o código do futuro (NG para gás natural). Treasuries: o índice do Yahoo (TNX).</p>
         <ul id="l-ativos" class="ativos-lista"></ul>
+      </section>
+
+      <section id="aba-equipe" class="aba" hidden>
+        <form id="form-usuario" class="form-linha">
+          <div class="campo campo-largo"><label for="u-nome">Nome</label><input id="u-nome" maxlength="60" placeholder="Ex.: Ana Souza" required></div>
+          <div class="campo"><label for="u-login">Usuário</label><input id="u-login" maxlength="80" autocapitalize="none" spellcheck="false" placeholder="Ex.: ana" required></div>
+          <div class="campo campo-checks"><label><input type="checkbox" id="u-admin"> Administrador</label></div>
+          <div class="campo-botoes"><button type="submit" class="btn btn-primario">Criar acesso</button></div>
+        </form>
+        <p id="u-senha-msg" class="nota" hidden></p>
+        <ul id="l-equipe" class="equipe-lista"></ul>
+        <p class="nota">Cada pessoa entra com o próprio usuário e uma senha provisória, que ela troca no primeiro acesso. Administradores gerenciam a equipe e a lista de ativos. Desativar corta o acesso na hora.</p>
       </section>
     </section>
   </main>

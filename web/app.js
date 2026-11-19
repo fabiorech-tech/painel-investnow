@@ -12,7 +12,8 @@
   const $$ = (s) => [...document.querySelectorAll(s)];
 
   const est = {
-    codigo: ler("painel.codigo") || "",
+    sessao: ler("painel.sessao") || "",
+    eu: null, usuarios: [],
     ativos: [],
     cot: {},            // simbolo -> {preco, variacao, anterior, volume, hora}
     sel: ler("painel.sel") || "BTC",
@@ -28,11 +29,11 @@
   async function api(acao, params = {}) {
     const r = await fetch(API, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-codigo": est.codigo },
+      headers: { "Content-Type": "application/json", "x-sessao": est.sessao },
       body: JSON.stringify({ acao, ...params }),
     });
     const j = await r.json().catch(() => ({ erro: `Erro ${r.status}` }));
-    if (r.status === 401) { sair(); throw new Error(j.erro); }
+    if (r.status === 401 && acao !== "entrar") { sair(false); throw new Error(j.erro); }
     if (!r.ok || j.erro) throw new Error(j.erro || `Erro ${r.status}`);
     return j.dados;
   }
@@ -74,23 +75,54 @@
   }
 
   // ---------- Login ----------
-  async function entrar(codigo) {
-    est.codigo = codigo.trim();
-    await api("entrar");
-    gravar("painel.codigo", est.codigo);
-  }
-  function sair() {
-    gravar("painel.codigo", null); est.codigo = "";
+  gravar("painel.codigo", null); // código compartilhado antigo, não é mais usado
+  function telaLogin(qual) {
     $("#app").hidden = true; $("#tela-login").hidden = false;
+    $("#form-login").hidden = qual !== "login"; $("#form-nova-senha").hidden = qual !== "senha";
+    (qual === "senha" ? $("#nova-senha") : $("#login")).focus();
+  }
+  function aposEntrar(eu) {
+    est.eu = eu;
+    if (eu.trocar_senha) return telaLogin("senha");
+    $("#usuario-topo").innerHTML = `<b>${esc(eu.nome)}</b>`;
+    $('.abas button[data-aba="equipe"]').hidden = !eu.admin;
+    $("#form-ativo").hidden = !eu.admin;
+    iniciar();
+  }
+  function sair(chamarApi = true) {
+    if (chamarApi && est.sessao) api("sair").catch(() => {});
+    gravar("painel.sessao", null); est.sessao = ""; est.eu = null;
     if (est.ws) est.ws.close(); if (est.wsKline) est.wsKline.close();
+    $("#senha").value = ""; telaLogin("login");
   }
   $("#form-login").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("#login-erro").hidden = true;
-    try { await entrar($("#codigo").value); iniciar(); }
-    catch (err) { $("#login-erro").textContent = err.message || "Não foi possível entrar"; $("#login-erro").hidden = false; }
+    try {
+      const r = await api("entrar", { login: $("#login").value, senha: $("#senha").value });
+      est.sessao = r.token; gravar("painel.sessao", r.token); gravar("painel.login", $("#login").value.trim());
+      $("#senha").value = "";
+      aposEntrar(r.usuario);
+    } catch (err) { $("#login-erro").textContent = err.message || "Não foi possível entrar"; $("#login-erro").hidden = false; }
   });
-  $("#sair").addEventListener("click", sair);
+  $("#form-nova-senha").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("#nova-senha-erro"); err.hidden = true;
+    const a = $("#nova-senha").value, b = $("#nova-senha2").value;
+    if (a !== b) { err.textContent = "As duas senhas não são iguais"; err.hidden = false; return; }
+    try {
+      const eu = await api("senha_trocar", { senha: a });
+      e.target.reset(); aposEntrar(eu); aviso("Senha salva");
+    } catch (x) { err.textContent = x.message; err.hidden = false; }
+  });
+  $("#sair").addEventListener("click", () => sair());
+  $("#minha-senha").addEventListener("click", () => {
+    $("#nova-senha-erro").hidden = true;
+    $("#form-nova-senha h2").textContent = "Trocar senha";
+    $("#form-nova-senha .mudo").textContent = "Escolha uma nova senha com pelo menos 8 caracteres.";
+    telaLogin("senha");
+  });
+  $("#login").value = ler("painel.login") || "";
 
   // ---------- Lista de ativos ----------
   function desenharLista() {
@@ -245,8 +277,8 @@
     const el = $("#grafico");
     chart = LightweightCharts.createChart(el, {
       autoSize: true,
-      layout: { background: { color: "transparent" }, textColor: cor("--ink-muted"), fontFamily: "IBM Plex Mono, monospace" },
-      grid: { vertLines: { color: "#ece7dc" }, horzLines: { color: "#ece7dc" } },
+      layout: { background: { color: "transparent" }, textColor: cor("--ink-muted"), fontFamily: "Poppins, system-ui, sans-serif" },
+      grid: { vertLines: { color: "#0b2a22" }, horzLines: { color: "#0b2a22" } },
       rightPriceScale: { borderColor: cor("--hairline") },
       timeScale: { borderColor: cor("--hairline"), timeVisible: true, secondsVisible: false },
       crosshair: { mode: 0 },
@@ -378,7 +410,6 @@
       $("#d-lado").value = tipo;
       const q = est.cot[est.sel]; const a = porSimbolo(est.sel);
       $("#d-preco").value = q?.preco != null ? String(Number(q.preco.toFixed(casas(q.preco, a)))).replace(".", ",") : "";
-      $("#d-autor").value = ler("painel.autor") || "";
       $("#form-decisao").hidden = false; $("#d-qtd").focus();
     }
     $(".abas").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -393,11 +424,10 @@
     e.preventDefault();
     const btn = e.submitter; btn.disabled = true;
     try {
-      gravar("painel.autor", $("#d-autor").value);
       const d = await api("decisao_adicionar", {
         simbolo: $("#d-simbolo").value, lado: $("#d-lado").value,
         preco: numBR($("#d-preco").value), quantidade: numBR($("#d-qtd").value),
-        motivo: $("#d-motivo").value, autor: $("#d-autor").value,
+        motivo: $("#d-motivo").value,
       });
       est.decisoes.unshift(d); desenharDecisoes();
       e.target.reset(); e.target.hidden = true; aviso("Decisão registrada");
@@ -566,6 +596,47 @@
     } catch (err) { aviso(err.message, true); }
   }
 
+  // ---------- Equipe (só administradores) ----------
+  function quando(iso) { return iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "nunca entrou"; }
+  async function carregarEquipe() {
+    if (!est.eu?.admin) return;
+    try { est.usuarios = await api("usuarios"); desenharEquipe(); } catch (err) { aviso(err.message, true); }
+  }
+  function desenharEquipe() {
+    $("#l-equipe").innerHTML = est.usuarios.map((u) => `<li>
+      <span class="nm"><b>${esc(u.nome)}</b>${u.admin ? '<span class="etiqueta">Admin</span>' : ""}${u.ativo ? "" : '<span class="etiqueta off">Desativado</span>'}
+        <span>Usuário: ${esc(u.login)} · Último acesso: ${quando(u.ultimo_acesso)}${u.trocar_senha && u.ativo ? " · ainda com senha provisória" : ""}</span></span>
+      ${u.id === est.eu.id ? '<span class="nota">Você</span>' : `<span class="equipe-acoes">
+        <button type="button" class="btn btn-fantasma btn-p" data-u-reset="${u.id}">Nova senha provisória</button>
+        <button type="button" class="btn btn-fantasma btn-p" data-u-admin="${u.id}" data-v="${!u.admin}">${u.admin ? "Tirar admin" : "Tornar admin"}</button>
+        <button type="button" class="btn btn-fantasma btn-p" data-u-ativo="${u.id}" data-v="${!u.ativo}">${u.ativo ? "Desativar" : "Reativar"}</button>
+      </span>`}
+    </li>`).join("");
+  }
+  function mostrarSenha(login, senha) {
+    const el = $("#u-senha-msg");
+    el.innerHTML = `Acesso de <b>${esc(login)}</b>: senha provisória <span class="senha-temp">${esc(senha)}</span>. Envie para a pessoa junto com o link do painel. Ela troca a senha no primeiro acesso. Esta senha não aparece de novo.`;
+    el.hidden = false;
+  }
+  $("#form-usuario").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    try {
+      const r = await api("usuario_criar", { nome: $("#u-nome").value, login: $("#u-login").value, admin: $("#u-admin").checked });
+      e.target.reset(); mostrarSenha(r.login, r.senha); carregarEquipe();
+    } catch (err) { aviso(err.message, true); }
+    btn.disabled = false;
+  });
+  $("#l-equipe").addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    try {
+      if (b.dataset.uReset) { const r = await api("usuario_resetar", { id: Number(b.dataset.uReset) }); mostrarSenha(r.login, r.senha); }
+      else if (b.dataset.uAdmin) await api("usuario_alterar", { id: Number(b.dataset.uAdmin), admin: b.dataset.v === "true" });
+      else if (b.dataset.uAtivo) await api("usuario_alterar", { id: Number(b.dataset.uAtivo), ativo: b.dataset.v === "true" });
+      carregarEquipe();
+    } catch (err) { aviso(err.message, true); }
+  });
+
   // ---------- Início ----------
   let iniciado = false;
   async function iniciar() {
@@ -575,23 +646,23 @@
     selecionar(est.sel);
     buscarAtrasadas();
     carregarRegistros();
-    buscarNoticias(); buscarIndicadores(); buscarTesouro();
+    buscarNoticias(); buscarIndicadores(); buscarTesouro(); carregarEquipe();
     if (iniciado) return;
     iniciado = true;
-    setInterval(() => { if (!document.hidden && est.codigo) buscarAtrasadas(); }, 30_000);
-    setInterval(() => { if (!document.hidden && est.codigo) carregarRegistros(); }, 60_000);
+    setInterval(() => { if (!document.hidden && est.sessao) buscarAtrasadas(); }, 30_000);
+    setInterval(() => { if (!document.hidden && est.sessao) carregarRegistros(); }, 60_000);
     setInterval(() => { if (!document.hidden && est.decisoes.length) desenharDecisoes(); }, 5_000);
-    setInterval(() => { if (!document.hidden && est.codigo) buscarNoticias(); }, 5 * 60_000);
-    setInterval(() => { if (est.codigo) { buscarIndicadores(); buscarTesouro(); } }, 60 * 60_000);
+    setInterval(() => { if (!document.hidden && est.sessao) buscarNoticias(); }, 5 * 60_000);
+    setInterval(() => { if (est.sessao) { buscarIndicadores(); buscarTesouro(); } }, 60 * 60_000);
   }
 
   setInterval(() => {
     $("#relogio").textContent = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" }) + " Brasília";
   }, 1000);
 
-  if (est.codigo) {
-    entrar(est.codigo).then(iniciar).catch(() => ($("#tela-login").hidden = false));
+  if (est.sessao) {
+    api("eu").then(aposEntrar).catch(() => telaLogin("login"));
   } else {
-    $("#tela-login").hidden = false;
+    telaLogin("login");
   }
 })();
