@@ -2,6 +2,7 @@
 // por e-mail (Resend) e WhatsApp (CallMeBot) quando as chaves estão configuradas.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { type Ativo, type Cotacao, cotacao } from "./mercado.ts";
+import { type Titulo, tesouro } from "./extras.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -35,10 +36,24 @@ function avaliar(a: Alerta, at: Ativo, q: Cotacao): string | null {
   return null;
 }
 
-// Alvo de preço: dispara uma vez e desliga. Variação e volume: no máximo uma vez por dia.
+const NOMES_TD: Record<string, string> = { "Tesouro Prefixado com Juros Semestrais": "Tesouro Prefixado c/ juros", "Tesouro IPCA+ com Juros Semestrais": "Tesouro IPCA+ c/ juros" };
+function avaliarTesouro(a: Alerta, t: Titulo): string | null {
+  if (t.taxa == null) return null;
+  const nome = `${NOMES_TD[t.tipo] ?? t.tipo} ${t.vencimento.slice(6)}`;
+  const idx = t.tipo === "Tesouro Selic" ? "Selic + " : t.tipo.startsWith("Tesouro IPCA") ? "IPCA + " : "";
+  const casas = t.tipo === "Tesouro Selic" ? 4 : 2;
+  const tx = `${idx}${fmt(t.taxa, casas)}%`;
+  const quando = t.aoVivo ? `às ${t.hora}` : `no fechamento de ${t.data}`;
+  if (a.tipo === "taxa_acima" && t.taxa >= a.valor) return `${nome} chegou a ${tx} ${quando}, no alvo de ${idx}${fmt(a.valor, casas)}% ou mais. PU de compra R$ ${fmt(t.pu ?? 0)}.`;
+  if (a.tipo === "taxa_abaixo" && t.taxa <= a.valor) return `${nome} caiu para ${tx} ${quando}, no alvo de ${idx}${fmt(a.valor, casas)}% ou menos. PU de compra R$ ${fmt(t.pu ?? 0)}.`;
+  return null;
+}
+
+// Alvos de preço e de taxa: disparam uma vez e desligam. Variação e volume: no máximo uma vez por dia.
+const unico = (tipo: string) => tipo.startsWith("preco") || tipo.startsWith("taxa");
 function podeDisparar(a: Alerta) {
   if (!a.ultimo_disparo) return true;
-  if (a.tipo.startsWith("preco")) return false;
+  if (unico(a.tipo)) return false;
   return diaBR(new Date(a.ultimo_disparo)) !== diaBR(new Date());
 }
 
@@ -80,7 +95,9 @@ Deno.serve(async (req) => {
 
   const resultados: unknown[] = [];
   const pendentes = (alertas as Alerta[] ?? []).filter(podeDisparar);
-  const simbolos = [...new Set(pendentes.map((a) => a.simbolo))];
+  const simbolos = [...new Set(pendentes.filter((a) => !a.simbolo.startsWith("TD|")).map((a) => a.simbolo))].filter((x) => porSimbolo.has(x));
+  const titulos = pendentes.some((a) => a.simbolo.startsWith("TD|")) ? await tesouro().catch(() => [] as Titulo[]) : [];
+  const porTitulo = new Map(titulos.map((t) => [`TD|${t.tipo}|${t.vencimento}`, t]));
   const cotacoes = new Map(
     await Promise.all(simbolos.map(async (s) => [s, await cotacao(porSimbolo.get(s)!)] as const)),
   );
@@ -88,6 +105,12 @@ Deno.serve(async (req) => {
   const mensagens: { alerta?: Alerta; simbolo: string; msg: string }[] = [];
   if (teste) mensagens.push({ simbolo: "TESTE", msg: "Teste do Painel InvestNow: os alertas estão chegando." });
   for (const a of pendentes) {
+    if (a.simbolo.startsWith("TD|")) {
+      const t = porTitulo.get(a.simbolo);
+      const msg = t ? avaliarTesouro(a, t) : null;
+      if (t && msg) mensagens.push({ alerta: a, simbolo: `${NOMES_TD[t.tipo] ?? t.tipo} ${t.vencimento.slice(6)}`, msg });
+      continue;
+    }
     const at = porSimbolo.get(a.simbolo);
     const q = cotacoes.get(a.simbolo);
     if (!at || !q) continue;
@@ -112,7 +135,7 @@ Deno.serve(async (req) => {
     });
     if (m.alerta) {
       const upd: Record<string, unknown> = { ultimo_disparo: new Date().toISOString() };
-      if (m.alerta.tipo.startsWith("preco")) upd.ativo = false;
+      if (unico(m.alerta.tipo)) upd.ativo = false;
       await db.from("alertas").update(upd).eq("id", m.alerta.id);
     }
     resultados.push({ simbolo: m.simbolo, canais, erros });

@@ -216,9 +216,14 @@ async function tratar(acao: string, p: Record<string, unknown>, eu: Usuario, tok
 
     case "alerta_adicionar": {
       const tipo = texto(p.tipo, 20);
-      if (!["variacao", "preco_acima", "preco_abaixo", "volume"].includes(tipo)) throw new Error("Tipo de alerta inválido");
+      if (!["variacao", "preco_acima", "preco_abaixo", "volume", "taxa_acima", "taxa_abaixo"].includes(tipo)) throw new Error("Tipo de alerta inválido");
+      const simbolo = texto(p.simbolo, 80);
+      const td = simbolo.startsWith("TD|");
+      if (td !== tipo.startsWith("taxa_")) throw new Error("Para títulos do Tesouro, use taxa sobe até ou taxa cai até");
+      if (td && !(await tesouro()).some((t) => `TD|${t.tipo}|${t.vencimento}` === simbolo)) throw new Error("Título do Tesouro não encontrado");
+      if (!td) await ativo(simbolo);
       const reg = {
-        simbolo: texto(p.simbolo, 20), tipo, valor: numero(p.valor),
+        simbolo, tipo, valor: numero(p.valor),
         email: p.email !== false, whatsapp: p.whatsapp !== false,
       };
       const { data, error } = await db.from("alertas").insert(reg).select().single();

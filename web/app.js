@@ -397,16 +397,26 @@
     b.innerHTML = b.textContent.replace(/\d+$/, "").trim() + (n ? ` <span class="cont">${n}</span>` : "");
   }
 
-  function opcoesAtivos(sel) {
-    sel.innerHTML = est.ativos.map((a) => `<option value="${esc(a.simbolo)}">${esc(a.simbolo)} · ${esc(a.nome)}</option>`).join("");
+  function opcoesAtivos(sel, comTesouro = false) {
+    sel.innerHTML = est.ativos.map((a) => `<option value="${esc(a.simbolo)}">${esc(a.simbolo)} · ${esc(a.nome)}</option>`).join("")
+      + (comTesouro && est.tesouro.length ? `<optgroup label="Tesouro Direto">${est.tesouro.map((t) =>
+        `<option value="${esc(chaveTD(t))}">${esc(nomeTD(t))}</option>`).join("")}</optgroup>` : "");
     sel.value = est.sel;
+  }
+  const chaveTD = (t) => `TD|${t.tipo}|${t.vencimento}`;
+  const nomeTD = (t) => `Tesouro ${NOMES_TD[t.tipo] || t.tipo} ${t.vencimento.slice(6)}`;
+  const tituloPorChave = (k) => est.tesouro.find((t) => chaveTD(t) === k);
+  function nomeAlvoAlerta(sim) {
+    if (!sim.startsWith("TD|")) return sim;
+    const [, tipo, venc] = sim.split("|");
+    return nomeTD({ tipo, vencimento: venc });
   }
 
   // ---------- Decisões ----------
   $$("[data-abrir]").forEach((b) => b.addEventListener("click", () => {
     const tipo = b.dataset.abrir;
     if (tipo === "alerta") {
-      abrirAba("alertas"); opcoesAtivos($("#a-simbolo")); $("#form-alerta").hidden = false; ajustarRotuloAlerta(); $("#a-valor").focus();
+      abrirAba("alertas"); opcoesAtivos($("#a-simbolo"), true); $("#form-alerta").hidden = false; ajustarRotuloAlerta(); $("#a-valor").focus();
     } else {
       abrirAba("decisoes"); opcoesAtivos($("#d-simbolo"));
       $("#d-lado").value = tipo;
@@ -486,16 +496,25 @@
   }
 
   // ---------- Alertas ----------
-  const ROTULOS = { variacao: "Variação (%)", preco_acima: "Preço alvo", preco_abaixo: "Preço alvo", volume: "Vezes a média" };
+  const ROTULOS = { variacao: "Variação (%)", preco_acima: "Preço alvo", preco_abaixo: "Preço alvo", volume: "Vezes a média", taxa_acima: "Taxa alvo (%)", taxa_abaixo: "Taxa alvo (%)" };
+  const TIPOS_ATIVO = `<option value="variacao">Variação no dia maior que (%)</option><option value="preco_acima">Preço sobe até</option><option value="preco_abaixo">Preço cai até</option><option value="volume">Volume acima de N vezes a média</option>`;
+  const TIPOS_TD = `<option value="taxa_acima">Taxa sobe até (%)</option><option value="taxa_abaixo">Taxa cai até (%)</option>`;
+  let alertaTD = null;
   function ajustarRotuloAlerta() {
+    const sim = $("#a-simbolo").value, td = sim.startsWith("TD|");
+    if (td !== alertaTD) { $("#a-tipo").innerHTML = td ? TIPOS_TD : TIPOS_ATIVO; alertaTD = td; }
     const t = $("#a-tipo").value; $("#a-valor-rot").textContent = ROTULOS[t];
-    $("#a-valor").placeholder = t === "variacao" ? "Ex.: 3" : t === "volume" ? "Ex.: 2" : "Ex.: " + fmtN(est.cot[$("#a-simbolo").value]?.preco ?? 0);
+    const tit = td ? tituloPorChave(sim) : null;
+    $("#a-valor").placeholder = td ? `Agora ${fmtN(tit?.taxa, tit?.tipo === "Tesouro Selic" ? 4 : 2)}` : t === "variacao" ? "Ex.: 3" : t === "volume" ? "Ex.: 2" : "Ex.: " + fmtN(est.cot[sim]?.preco ?? 0);
   }
   $("#a-tipo").addEventListener("change", ajustarRotuloAlerta);
   $("#a-simbolo").addEventListener("change", ajustarRotuloAlerta);
   function descreverAlerta(al) {
     const a = porSimbolo(al.simbolo); const v = Number(al.valor);
+    const idx = al.simbolo.includes("|Tesouro Selic|") ? "Selic + " : al.simbolo.includes("|Tesouro IPCA") ? "IPCA + " : "";
     return {
+      taxa_acima: `Taxa chega a ${idx}${fmtN(v, idx === "Selic + " ? 4 : 2)}% ou mais`,
+      taxa_abaixo: `Taxa cai a ${idx}${fmtN(v, idx === "Selic + " ? 4 : 2)}% ou menos`,
       variacao: `Variação no dia de ${fmtN(v)}% ou mais`,
       preco_acima: `Preço chega a ${fmtPreco(v, a)} ou mais`,
       preco_abaixo: `Preço cai a ${fmtPreco(v, a)} ou menos`,
@@ -521,7 +540,7 @@
     $("#t-alertas").closest(".tabela-rolagem").hidden = !est.alertas.length;
     contador("alertas", est.alertas.filter((a) => a.ativo).length);
     $("#t-alertas tbody").innerHTML = est.alertas.map((al) => `<tr>
-      <td><b>${esc(al.simbolo)}</b></td>
+      <td><b>${esc(nomeAlvoAlerta(al.simbolo))}</b></td>
       <td>${esc(descreverAlerta(al))}</td>
       <td>${[al.whatsapp && "WhatsApp", al.email && "E-mail"].filter(Boolean).join(" · ")}</td>
       <td class="num">${al.ultimo_disparo ? dataHora(al.ultimo_disparo) : "—"}</td>
