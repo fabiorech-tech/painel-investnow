@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Painel InvestNow</title>
+<meta name="theme-color" content="#0e1521">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1521'/%3E%3Cpath d='M9 8v16M9 12h3v8H9M20 6v20M18 10h4v9h-4' stroke='%23e3a64b' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<section id="tela-login" class="login" hidden>
+  <form id="form-login" class="login-caixa">
+    <div class="marca"><span class="marca-sinal"></span>InvestNow <b>Painel</b></div>
+    <label for="codigo">Código de acesso</label>
+    <input id="codigo" autocomplete="current-password" inputmode="text" spellcheck="false" required>
+    <button type="submit" class="btn btn-primario">Entrar</button>
+    <p id="login-erro" class="erro" hidden></p>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header class="topo">
+    <div class="marca"><span class="marca-sinal"></span>InvestNow <b>Painel</b></div>
+    <div class="topo-status">
+      <span id="st-binance" class="fonte-st" title="Cripto e câmbio">Binance</span>
+      <span id="st-atraso" class="fonte-st" title="B3, EUA e renda fixa">B3 · EUA</span>
+      <span id="relogio" class="relogio"></span>
+      <button id="sair" class="btn btn-fantasma btn-p" type="button">Sair</button>
+    </div>
+  </header>
+
+  <main class="grade">
+    <aside class="lista" aria-label="Ativos">
+      <div class="lista-cab">
+        <span>Ativo</span><span class="dir">Preço</span><span class="dir">Dia</span>
+      </div>
+      <div id="lista"></div>
+    </aside>
+
+    <section class="centro">
+      <div class="graf-cab">
+        <div class="graf-id">
+          <h1 id="g-simbolo">—</h1>
+          <span id="g-nome" class="mudo"></span>
+          <span id="g-fonte" class="selo"></span>
+        </div>
+        <div class="graf-preco">
+          <span id="g-preco" class="num grande">—</span>
+          <span id="g-var" class="num"></span>
+        </div>
+      </div>
+      <div class="graf-barra">
+        <div id="intervalos" class="segmentos" role="group" aria-label="Intervalo das velas">
+          <button type="button" data-iv="1m">1m</button>
+          <button type="button" data-iv="5m">5m</button>
+          <button type="button" data-iv="15m">15m</button>
+          <button type="button" data-iv="1h">1h</button>
+          <button type="button" data-iv="1d">1D</button>
+        </div>
+        <div class="graf-acoes">
+          <button type="button" class="btn btn-compra btn-p" data-abrir="compra">Registrar compra</button>
+          <button type="button" class="btn btn-venda btn-p" data-abrir="venda">Registrar venda</button>
+          <button type="button" class="btn btn-fantasma btn-p" data-abrir="alerta">Criar alerta</button>
+        </div>
+      </div>
+      <div id="grafico" class="grafico"><p id="graf-msg" class="graf-msg">Carregando velas…</p></div>
+      <div id="g-ohlc" class="ohlc num"></div>
+
+      <nav class="abas" role="tablist">
+        <button type="button" role="tab" data-aba="decisoes" aria-selected="true">Decisões</button>
+        <button type="button" role="tab" data-aba="alertas">Alertas</button>
+        <button type="button" role="tab" data-aba="disparos">Disparados</button>
+        <button type="button" role="tab" data-aba="ativos">Ativos</button>
+      </nav>
+
+      <section id="aba-decisoes" class="aba">
+        <form id="form-decisao" class="form-linha" hidden>
+          <div class="campo"><label for="d-simbolo">Ativo</label><select id="d-simbolo"></select></div>
+          <div class="campo"><label for="d-lado">Lado</label>
+            <select id="d-lado"><option value="compra">Compra</option><option value="venda">Venda</option></select></div>
+          <div class="campo"><label for="d-preco">Preço</label><input id="d-preco" inputmode="decimal" required></div>
+          <div class="campo"><label for="d-qtd">Quantidade</label><input id="d-qtd" inputmode="decimal" required></div>
+          <div class="campo campo-largo"><label for="d-motivo">Motivo</label><input id="d-motivo" maxlength="1000" placeholder="Ex.: rompeu resistência com volume"></div>
+          <div class="campo"><label for="d-autor">Quem decidiu</label><input id="d-autor" maxlength="60"></div>
+          <div class="campo-botoes">
+            <button type="submit" class="btn btn-primario">Salvar decisão</button>
+            <button type="button" class="btn btn-fantasma" data-fechar>Cancelar</button>
+          </div>
+        </form>
+        <div id="resumo-decisoes" class="resumo"></div>
+        <div class="tabela-rolagem"><table class="tabela" id="t-decisoes">
+          <thead><tr><th>Data</th><th>Ativo</th><th>Lado</th><th class="dir">Preço</th><th class="dir">Qtd</th><th class="dir">Agora</th><th class="dir">Resultado</th><th>Motivo</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="vazio" id="v-decisoes" hidden>Nenhuma decisão registrada. Use “Registrar compra” ou “Registrar venda” acima do gráfico.</p>
+      </section>
+
+      <section id="aba-alertas" class="aba" hidden>
+        <form id="form-alerta" class="form-linha" hidden>
+          <div class="campo"><label for="a-simbolo">Ativo</label><select id="a-simbolo"></select></div>
+          <div class="campo campo-largo"><label for="a-tipo">Quando avisar</label>
+            <select id="a-tipo">
+              <option value="variacao">Variação no dia maior que (%)</option>
+              <option value="preco_acima">Preço sobe até</option>
+              <option value="preco_abaixo">Preço cai até</option>
+              <option value="volume">Volume acima de N vezes a média</option>
+            </select></div>
+          <div class="campo"><label for="a-valor" id="a-valor-rot">Valor</label><input id="a-valor" inputmode="decimal" required></div>
+          <div class="campo campo-checks">
+            <label><input type="checkbox" id="a-email" checked> E-mail</label>
+            <label><input type="checkbox" id="a-zap" checked> WhatsApp</label>
+          </div>
+          <div class="campo-botoes">
+            <button type="submit" class="btn btn-primario">Criar alerta</button>
+            <button type="button" class="btn btn-fantasma" data-fechar>Cancelar</button>
+          </div>
+        </form>
+        <div class="tabela-rolagem"><table class="tabela" id="t-alertas">
+          <thead><tr><th>Ativo</th><th>Condição</th><th>Canais</th><th>Último aviso</th><th>Situação</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="vazio" id="v-alertas" hidden>Nenhum alerta. Clique em “Criar alerta” para ser avisado por WhatsApp e e-mail.</p>
+        <p class="nota">Os alertas são checados a cada minuto no servidor, mesmo com o painel fechado. Alvo de preço avisa uma vez e desliga; variação e volume avisam no máximo uma vez por dia.</p>
+      </section>
+
+      <section id="aba-disparos" class="aba" hidden>
+        <ul id="l-disparos" class="disparos"></ul>
+        <p class="vazio" id="v-disparos" hidden>Nenhum alerta disparou ainda.</p>
+      </section>
+
+      <section id="aba-ativos" class="aba" hidden>
+        <form id="form-ativo" class="form-linha">
+          <div class="campo"><label for="n-classe">Tipo</label>
+            <select id="n-classe">
+              <option value="b3">Ação B3</option>
+              <option value="eua">EUA</option>
+              <option value="cripto">Cripto</option>
+              <option value="cambio">Câmbio (par Binance)</option>
+              <option value="rendafixa">Renda fixa (série BCB)</option>
+            </select></div>
+          <div class="campo"><label for="n-simbolo">Código</label><input id="n-simbolo" placeholder="Ex.: MGLU3" required></div>
+          <div class="campo" id="n-codigo-campo" hidden><label for="n-codigo">Nº da série BCB</label><input id="n-codigo" inputmode="numeric" placeholder="Ex.: 11"></div>
+          <div class="campo campo-largo"><label for="n-nome">Nome</label><input id="n-nome" placeholder="Ex.: Magazine Luiza ON"></div>
+          <div class="campo-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
+        </form>
+        <p id="n-ajuda" class="nota">Ação da B3: digite o código (PETR4). EUA: o ticker (TSLA). Cripto: a sigla (ADA). Câmbio: o par da Binance (USDTBRL).</p>
+        <ul id="l-ativos" class="ativos-lista"></ul>
+      </section>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    Cripto e câmbio ao vivo pela Binance (câmbio via USDT). B3 e EUA com atraso de cerca de 15 minutos. Renda fixa: Banco Central, diário.
+    Painel de observação: nenhuma ordem é enviada.
+  </footer>
+</div>
+
+<div id="aviso" class="aviso" role="status" hidden></div>
+
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
