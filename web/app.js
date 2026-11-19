@@ -6,7 +6,8 @@
   const API = window.PAINEL_CONFIG.api;
   const BINANCE_WS = "wss://stream.binance.com:9443";
   const BINANCE_REST = "https://api.binance.com/api/v3";
-  const CLASSES = { b3: "Ações B3", eua: "EUA", cripto: "Cripto", cambio: "Câmbio", rendafixa: "Renda fixa" };
+  const CLASSES = { b3: "Ações B3", eua: "Ações EUA", cripto: "Cripto", cambio: "Câmbio", commodities: "Commodities", treasury: "Treasuries EUA", rendafixa: "Juros Brasil" };
+  const ATRASO = { cripto: "Ao vivo", cambio: "Ao vivo", rendafixa: "Diário", treasury: "Atraso ~15 min", b3: "Atraso 15 min", eua: "Atraso ~15 min", commodities: "Atraso ~10 min" };
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
 
@@ -16,7 +17,7 @@
     cot: {},            // simbolo -> {preco, variacao, anterior, volume, hora}
     sel: ler("painel.sel") || "BTC",
     iv: ler("painel.iv") || "15m",
-    decisoes: [], alertas: [], disparos: [],
+    decisoes: [], alertas: [], disparos: [], indicadores: [], tesouro: [], noticias: [],
     ws: null, wsKline: null,
   };
 
@@ -37,10 +38,11 @@
   }
 
   // ---------- Formatação ----------
-  const moeda = (a) => a.classe === "rendafixa" ? "%" : (a.classe === "b3" || a.codigo.endsWith("BRL")) ? "R$" : "US$";
+  const ehJuros = (a) => a && (a.classe === "rendafixa" || a.classe === "treasury");
+  const moeda = (a) => ehJuros(a) ? "%" : (a.classe === "b3" || a.codigo.endsWith("BRL")) ? "R$" : "US$";
   const ehIndice = (a) => a.codigo.startsWith("^");
   function casas(v, a) {
-    if (a && a.classe === "rendafixa") return 2;
+    if (ehJuros(a)) return a.classe === "treasury" ? 3 : 2;
     if (v == null) return 2;
     const x = Math.abs(v);
     return x >= 1000 ? 2 : x >= 1 ? (a && a.classe === "cambio" ? 4 : 2) : x >= 0.01 ? 4 : 6;
@@ -50,12 +52,13 @@
     if (v == null) return "—";
     const n = fmtN(v, casas(v, a));
     if (!a || ehIndice(a)) return n;
-    return a.classe === "rendafixa" ? `${n}%` : n;
+    return ehJuros(a) ? `${n}%` : n;
   }
   function fmtVar(v, a) {
     if (v == null || isNaN(v)) return "—";
-    const s = v > 0 ? "+" : "";
-    return a && a.classe === "rendafixa" ? `${s}${fmtN(v, 2)} p.p.` : `${s}${fmtN(v, 2)}%`;
+    const sinal = v > 0 ? "+" : v < 0 ? "−" : "";
+    const abs = Math.abs(v);
+    return ehJuros(a) ? `${sinal}${fmtN(abs, a.classe === "treasury" ? 3 : 2)} p.p.` : `${sinal}${fmtN(abs, 2)}%`;
   }
   const tom = (v) => v > 0 ? "alta" : v < 0 ? "baixa" : "";
   const dataHora = (iso) => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -91,16 +94,19 @@
 
   // ---------- Lista de ativos ----------
   function desenharLista() {
-    const cont = $("#lista");
+    const cont = $("#quadros");
     cont.innerHTML = "";
-    for (const classe of Object.keys(CLASSES)) {
-      const grupo = est.ativos.filter((a) => a.classe === classe);
+    const ordem = ["b3", "eua", "cripto", "cambio", "commodities", "tesouro", "treasury", "rendafixa", "ind-br", "ind-eua"];
+    for (const chave of ordem) {
+      if (chave === "tesouro") { cont.append(quadroTesouro()); continue; }
+      if (chave.startsWith("ind-")) { cont.append(quadroIndicadores(chave.slice(4))); continue; }
+      const grupo = est.ativos.filter((a) => a.classe === chave);
       if (!grupo.length) continue;
+      const q = novoQuadro(CLASSES[chave], ATRASO[chave], "q-" + chave);
       const cab = document.createElement("div");
-      cab.className = "grupo";
-      const atraso = classe === "cripto" || classe === "cambio" ? "ao vivo" : classe === "rendafixa" ? "diário" : "atraso 15 min";
-      cab.innerHTML = `<span>${CLASSES[classe]}</span><span>${atraso}</span>`;
-      cont.append(cab);
+      cab.className = "linha-cab rotulo";
+      cab.innerHTML = `<span>Ativo</span><span class="dir">${ehJuros(grupo[0]) ? "Taxa" : "Preço"}</span><span class="dir">Dia</span>`;
+      const linhas = document.createElement("div"); linhas.className = "linhas";
       for (const a of grupo) {
         const b = document.createElement("button");
         b.type = "button"; b.className = "linha-ativo"; b.dataset.sim = a.simbolo;
@@ -108,11 +114,80 @@
         b.innerHTML = `<span class="la-id"><span class="la-sim">${esc(a.simbolo)}</span><span class="la-nome">${esc(a.nome)}</span></span>
           <span class="la-preco" data-p>—</span><span class="chip" data-v>—</span>`;
         b.addEventListener("click", () => selecionar(a.simbolo, true));
-        cont.append(b);
-        pintarLinha(a.simbolo);
+        linhas.append(b);
       }
+      q.append(cab, linhas);
+      cont.append(q);
+      grupo.forEach((a) => pintarLinha(a.simbolo));
     }
   }
+  function novoQuadro(titulo, selo, id) {
+    const q = document.createElement("section");
+    q.className = "quadro"; q.id = id;
+    q.setAttribute("aria-label", titulo);
+    q.innerHTML = `<div class="quadro-cab"><h2>${esc(titulo)}</h2><span class="rotulo">${esc(selo || "")}</span></div>`;
+    return q;
+  }
+
+  // ---------- Tesouro Direto ----------
+  const NOMES_TD = { "Tesouro Selic": "Selic", "Tesouro Prefixado": "Prefixado", "Tesouro Prefixado com Juros Semestrais": "Prefixado com juros", "Tesouro IPCA+": "IPCA+", "Tesouro IPCA+ com Juros Semestrais": "IPCA+ com juros" };
+  function quadroTesouro() {
+    const ts = est.tesouro;
+    const q = novoQuadro("Tesouro Direto", ts.length ? `Fechamento ${ts[0].data.slice(0, 5)}` : "Fechamento", "q-tesouro");
+    if (!ts.length) { q.insertAdjacentHTML("beforeend", `<p class="mudo">Carregando taxas…</p>`); return q; }
+    let html = `<div class="linha-cab rotulo"><span>Título</span><span class="dir">Taxa</span><span class="dir">Dia</span></div>`;
+    let grupo = "";
+    for (const t of ts) {
+      if (t.tipo !== grupo) { grupo = t.tipo; html += `<div class="subgrupo rotulo">${esc(NOMES_TD[t.tipo] || t.tipo)}</div>`; }
+      const d = t.taxa != null && t.taxaAnterior != null ? t.taxa - t.taxaAnterior : null;
+      const sel = t.tipo === "Tesouro Selic" ? "Selic + " : t.tipo.startsWith("Tesouro IPCA") ? "IPCA + " : "";
+      html += `<div class="linha-info"><span class="nm"><b class="num">${esc(t.vencimento.slice(6))}</b><span>vence ${esc(t.vencimento)} · R$ ${fmtN(t.pu)}</span></span>
+        <span class="num dir">${sel}${fmtN(t.taxa)}%</span><span class="chip ${tom(-(d || 0))}">${d == null ? "—" : fmtBp(d)}</span></div>`;
+    }
+    q.insertAdjacentHTML("beforeend", `<div class="linhas">${html}</div><p class="nota">Taxa de compra do Tesouro Direto no último fechamento. Taxa em queda deixa o título mais caro.</p>`);
+    return q;
+  }
+  const fmtBp = (d) => (d > 0 ? "+" : d < 0 ? "−" : "") + fmtN(Math.abs(d), 2) + " p.p.";
+
+  // ---------- Indicadores econômicos ----------
+  function quadroIndicadores(grupo) {
+    const lista = est.indicadores.filter((i) => i.grupo === grupo);
+    const q = novoQuadro(grupo === "br" ? "Indicadores Brasil" : "Indicadores EUA", grupo === "br" ? "BCB · IBGE" : "FRED", "q-ind-" + grupo);
+    if (!lista.length) { q.insertAdjacentHTML("beforeend", `<p class="mudo">Carregando indicadores…</p>`); return q; }
+    let html = `<div class="linha-cab rotulo"><span>Indicador</span><span class="dir">Último</span><span class="dir">Antes</span></div>`;
+    for (const i of lista) {
+      const casasI = i.unidade === "R$" ? 4 : i.unidade === "mil" || i.unidade === "pts" ? (i.unidade === "pts" ? 1 : 0) : 2;
+      const fmt = (v) => v == null ? "—" : i.unidade === "R$" ? "R$ " + fmtN(v, casasI) : i.unidade === "mil" ? (v > 0 ? "+" : v < 0 ? "−" : "") + fmtN(Math.abs(v), 0) + " mil" : i.unidade === "pts" ? fmtN(v, 1) : fmtN(v, 2) + "%";
+      html += `<div class="linha-info"><span class="nm"><b>${esc(i.nome)}</b><span>${esc(i.data || "sem dado")} · ${esc(i.fonte)}</span></span>
+        <span class="num dir">${fmt(i.valor)}</span><span class="num dir mudo">${fmt(i.anterior)}</span></div>`;
+    }
+    q.insertAdjacentHTML("beforeend", `<div class="linhas">${html}</div>`);
+    return q;
+  }
+  function trocarQuadro(id, novo) { const v = document.getElementById(id); if (v) v.replaceWith(novo); }
+  async function buscarIndicadores() {
+    try { est.indicadores = await api("indicadores"); trocarQuadro("q-ind-br", quadroIndicadores("br")); trocarQuadro("q-ind-eua", quadroIndicadores("eua")); } catch {}
+  }
+  async function buscarTesouro() {
+    try { est.tesouro = await api("tesouro"); trocarQuadro("q-tesouro", quadroTesouro()); } catch {}
+  }
+
+  // ---------- Notícias ----------
+  function tempoAtras(ms) {
+    const m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return "agora"; if (m < 60) return `há ${m} min`;
+    const h = Math.round(m / 60); if (h < 24) return `há ${h} h`;
+    return new Date(ms).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  }
+  async function buscarNoticias() {
+    try {
+      est.noticias = await api("noticias");
+      $("#l-noticias").innerHTML = est.noticias.map((n) => `<li><a href="${esc(n.link)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>
+        <span class="meta"><span>${esc(n.fonte)}</span><span>${n.quando ? tempoAtras(n.quando) : ""}</span></span></li>`).join("") || `<li class="mudo">Sem notícias agora.</li>`;
+      $("#n-hora").textContent = "Atualizado " + new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    } catch { $("#n-hora").textContent = "Falha ao atualizar"; }
+  }
+
   function pintarLinha(sim, anterior) {
     const a = porSimbolo(sim); const q = est.cot[sim];
     const b = document.querySelector(`.linha-ativo[data-sim="${CSS.escape(sim)}"]`);
@@ -170,16 +245,16 @@
     const el = $("#grafico");
     chart = LightweightCharts.createChart(el, {
       autoSize: true,
-      layout: { background: { color: "transparent" }, textColor: cor("--mudo"), fontFamily: "IBM Plex Mono, monospace" },
-      grid: { vertLines: { color: cor("--linha") + "80" }, horzLines: { color: cor("--linha") + "80" } },
-      rightPriceScale: { borderColor: cor("--linha") },
-      timeScale: { borderColor: cor("--linha"), timeVisible: true, secondsVisible: false },
+      layout: { background: { color: "transparent" }, textColor: cor("--ink-muted"), fontFamily: "IBM Plex Mono, monospace" },
+      grid: { vertLines: { color: "#ece7dc" }, horzLines: { color: "#ece7dc" } },
+      rightPriceScale: { borderColor: cor("--hairline") },
+      timeScale: { borderColor: cor("--hairline"), timeVisible: true, secondsVisible: false },
       crosshair: { mode: 0 },
       localization: { locale: "pt-BR", priceFormatter: (p) => fmtN(p, casas(p, porSimbolo(est.sel))) },
     });
     velasS = chart.addCandlestickSeries({
-      upColor: cor("--alta"), downColor: cor("--baixa"), borderVisible: false,
-      wickUpColor: cor("--alta"), wickDownColor: cor("--baixa"),
+      upColor: cor("--gain"), downColor: cor("--loss"), borderVisible: false,
+      wickUpColor: cor("--gain"), wickDownColor: cor("--loss"),
     });
     volS = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
     chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
@@ -187,16 +262,15 @@
       const d = p && p.seriesData && p.seriesData.get(velasS);
       mostrarOHLC(d || dadosVelas[dadosVelas.length - 1]);
     });
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { chart.remove(); criarGrafico(); carregarVelas(); });
   }
   function mostrarOHLC(d) {
     const a = porSimbolo(est.sel);
     if (!d || !a) { $("#g-ohlc").textContent = ""; return; }
-    if (a.classe === "rendafixa") { $("#g-ohlc").textContent = `Valor ${fmtPreco(d.close, a)}`; return; }
+    if (a.fonte === "bcb") { $("#g-ohlc").textContent = `Valor ${fmtPreco(d.close, a)}`; return; }
     $("#g-ohlc").innerHTML = `<span>A ${fmtN(d.open, casas(d.open, a))}</span><span>M ${fmtN(d.high, casas(d.high, a))}</span><span>m ${fmtN(d.low, casas(d.low, a))}</span><span>F ${fmtN(d.close, casas(d.close, a))}</span>`;
   }
   const paraVela = (v) => ({ time: Math.floor(v.t / 1000) + fuso(), open: v.o, high: v.h, low: v.l, close: v.c });
-  const paraVol = (v) => ({ time: Math.floor(v.t / 1000) + fuso(), value: v.v, color: (v.c >= v.o ? cor("--alta") : cor("--baixa")) + "55" });
+  const paraVol = (v) => ({ time: Math.floor(v.t / 1000) + fuso(), value: v.v, color: (v.c >= v.o ? cor("--gain") : cor("--loss")) + "55" });
 
   let pedidoVelas = 0, timerVelas;
   async function carregarVelas() {
@@ -204,7 +278,7 @@
     const meu = ++pedidoVelas;
     clearTimeout(timerVelas);
     if (est.wsKline) { est.wsKline.onclose = null; est.wsKline.close(); est.wsKline = null; }
-    const rf = a.classe === "rendafixa";
+    const rf = a.fonte === "bcb";
     $$("#intervalos button").forEach((b) => { b.disabled = rf && b.dataset.iv !== "1d"; b.setAttribute("aria-pressed", String((rf ? "1d" : est.iv) === b.dataset.iv)); });
     const iv = rf ? "1d" : est.iv;
     $("#graf-msg").textContent = "Carregando velas…"; $("#graf-msg").hidden = false;
@@ -255,10 +329,10 @@
     $("#g-simbolo").textContent = a.simbolo;
     $("#g-nome").textContent = a.nome;
     const vivo = a.fonte === "binance";
-    $("#g-fonte").textContent = vivo ? "ao vivo" : a.fonte === "bcb" ? "Banco Central · diário" : "atraso 15 min";
+    $("#g-fonte").textContent = vivo ? "Ao vivo" : a.fonte === "bcb" ? "Banco Central · diário" : ATRASO[a.classe] || "Com atraso";
     $("#g-fonte").className = "selo" + (vivo ? " vivo" : "");
     const m = moeda(a);
-    $("#g-preco").textContent = (m !== "%" && !ehIndice(a) ? m + " " : "") + fmtPreco(q.preco, a);
+    $("#g-preco").textContent = (m !== "%" && !ehIndice(a) && a.classe !== "commodities" ? m + " " : "") + fmtPreco(q.preco, a);
     $("#g-var").textContent = fmtVar(q.variacao, a);
     $("#g-var").className = "num chip " + tom(q.variacao);
     document.title = q.preco != null ? `${a.simbolo} ${fmtPreco(q.preco, a)} · Painel InvestNow` : "Painel InvestNow";
@@ -271,7 +345,7 @@
     $$(".linha-ativo").forEach((b) => b.setAttribute("aria-current", String(b.dataset.sim === sim)));
     pintarCabecalho();
     carregarVelas();
-    if (rolar && matchMedia("(max-width: 900px)").matches) $(".centro").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (rolar && matchMedia("(max-width: 980px)").matches) $(".destaque").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   $("#intervalos").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-iv]"); if (!b || b.disabled) return;
@@ -354,7 +428,7 @@
         <td class="dir num">${fmtPreco(Number(d.preco), a)}</td>
         <td class="dir num">${fmtN(Number(d.quantidade), Number(d.quantidade) % 1 ? 4 : 0)}</td>
         <td class="dir num">${fmtPreco(est.cot[d.simbolo]?.preco, a)}</td>
-        <td class="dir"><span class="chip ${tom(r)}">${r == null ? "—" : (r > 0 ? "+" : "") + fmtN(r) + "%"}</span></td>
+        <td class="dir"><span class="chip ${tom(r)}">${r == null ? "—" : (r > 0 ? "+" : r < 0 ? "−" : "") + fmtN(Math.abs(r)) + "%"}</span></td>
         <td class="motivo">${esc(d.motivo)}${d.autor ? ` <span class="mudo">· ${esc(d.autor)}</span>` : ""}</td>
         <td><button class="btn-x" type="button" data-del-dec="${d.id}" title="Apagar decisão" aria-label="Apagar decisão">✕</button></td>
       </tr>`;
@@ -362,7 +436,7 @@
     $("#resumo-decisoes").innerHTML = medidas ? `
       <div class="resumo-item"><span>Decisões</span><b>${est.decisoes.length}</b></div>
       <div class="resumo-item"><span>Acertando agora</span><b>${certas} de ${medidas}</b></div>
-      <div class="resumo-item"><span>Resultado médio</span><b class="${tom(soma)}">${(soma > 0 ? "+" : "") + fmtN(soma / medidas)}%</b></div>` : "";
+      <div class="resumo-item destaque-num"><span>Resultado médio</span><b class="${tom(soma)}">${(soma > 0 ? "+" : soma < 0 ? "−" : "") + fmtN(Math.abs(soma / medidas))}%</b></div>` : "";
   }
   $("#t-decisoes").addEventListener("click", (e) => confirmarApagar(e, "data-del-dec", async (id) => {
     await api("decisao_remover", { id }); est.decisoes = est.decisoes.filter((d) => d.id !== id); desenharDecisoes();
@@ -450,7 +524,7 @@
   $("#n-classe").addEventListener("change", () => {
     const rf = $("#n-classe").value === "rendafixa";
     $("#n-codigo-campo").hidden = !rf;
-    $("#n-simbolo").placeholder = { b3: "Ex.: MGLU3", eua: "Ex.: TSLA", cripto: "Ex.: ADA", cambio: "Ex.: USDTBRL", rendafixa: "Ex.: TR" }[$("#n-classe").value];
+    $("#n-simbolo").placeholder = { b3: "Ex.: MGLU3", eua: "Ex.: TSLA", cripto: "Ex.: ADA", cambio: "Ex.: USDTBRL", commodities: "Ex.: NG", treasury: "Ex.: TNX", rendafixa: "Ex.: TR" }[$("#n-classe").value];
   });
   $("#form-ativo").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -501,11 +575,14 @@
     selecionar(est.sel);
     buscarAtrasadas();
     carregarRegistros();
+    buscarNoticias(); buscarIndicadores(); buscarTesouro();
     if (iniciado) return;
     iniciado = true;
     setInterval(() => { if (!document.hidden && est.codigo) buscarAtrasadas(); }, 30_000);
     setInterval(() => { if (!document.hidden && est.codigo) carregarRegistros(); }, 60_000);
     setInterval(() => { if (!document.hidden && est.decisoes.length) desenharDecisoes(); }, 5_000);
+    setInterval(() => { if (!document.hidden && est.codigo) buscarNoticias(); }, 5 * 60_000);
+    setInterval(() => { if (est.codigo) { buscarIndicadores(); buscarTesouro(); } }, 60 * 60_000);
   }
 
   setInterval(() => {

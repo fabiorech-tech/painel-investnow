@@ -4,19 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Painel InvestNow</title>
-<meta name="theme-color" content="#0e1521">
+<meta name="theme-color" content="#f6f3ec">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1521'/%3E%3Cpath d='M9 8v16M9 12h3v8H9M20 6v20M18 10h4v9h-4' stroke='%23e3a64b' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f5c43'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EI%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
 
 <section id="tela-login" class="login" hidden>
   <form id="form-login" class="login-caixa">
-    <div class="marca"><span class="marca-sinal"></span>InvestNow <b>Painel</b></div>
-    <label for="codigo">Código de acesso</label>
-    <input id="codigo" autocomplete="current-password" inputmode="text" spellcheck="false" required>
+    <p class="marca">InvestNow</p>
+    <p class="mudo">Painel de observação do escritório</p>
+    <label for="codigo" class="rotulo">Código de acesso</label>
+    <input id="codigo" autocomplete="current-password" spellcheck="false" required>
     <button type="submit" class="btn btn-primario">Entrar</button>
     <p id="login-erro" class="erro" hidden></p>
   </form>
@@ -24,24 +25,17 @@
 
 <div id="app" hidden>
   <header class="topo">
-    <div class="marca"><span class="marca-sinal"></span>InvestNow <b>Painel</b></div>
+    <div class="topo-marca"><span class="marca">InvestNow</span><span class="rotulo">Painel</span></div>
     <div class="topo-status">
-      <span id="st-binance" class="fonte-st" title="Cripto e câmbio">Binance</span>
-      <span id="st-atraso" class="fonte-st" title="B3, EUA e renda fixa">B3 · EUA</span>
-      <span id="relogio" class="relogio"></span>
+      <span id="st-binance" class="fonte-st" title="Cripto e câmbio">Binance ao vivo</span>
+      <span id="st-atraso" class="fonte-st" title="B3, EUA, commodities e juros">Cotações com atraso</span>
+      <span id="relogio" class="relogio num"></span>
       <button id="sair" class="btn btn-fantasma btn-p" type="button">Sair</button>
     </div>
   </header>
 
-  <main class="grade">
-    <aside class="lista" aria-label="Ativos">
-      <div class="lista-cab">
-        <span>Ativo</span><span class="dir">Preço</span><span class="dir">Dia</span>
-      </div>
-      <div id="lista"></div>
-    </aside>
-
-    <section class="centro">
+  <main class="painel">
+    <section class="quadro destaque" aria-label="Gráfico">
       <div class="graf-cab">
         <div class="graf-id">
           <h1 id="g-simbolo">—</h1>
@@ -62,14 +56,23 @@
           <button type="button" data-iv="1d">1D</button>
         </div>
         <div class="graf-acoes">
-          <button type="button" class="btn btn-compra btn-p" data-abrir="compra">Registrar compra</button>
-          <button type="button" class="btn btn-venda btn-p" data-abrir="venda">Registrar venda</button>
+          <button type="button" class="btn btn-primario btn-p" data-abrir="compra">Registrar compra</button>
+          <button type="button" class="btn btn-fantasma btn-p" data-abrir="venda">Registrar venda</button>
           <button type="button" class="btn btn-fantasma btn-p" data-abrir="alerta">Criar alerta</button>
         </div>
       </div>
       <div id="grafico" class="grafico"><p id="graf-msg" class="graf-msg">Carregando velas…</p></div>
       <div id="g-ohlc" class="ohlc num"></div>
+    </section>
 
+    <section class="quadro noticias" aria-labelledby="t-noticias">
+      <div class="quadro-cab"><h2 id="t-noticias">Notícias</h2><span class="rotulo" id="n-hora"></span></div>
+      <ul id="l-noticias" class="lista-noticias"><li class="mudo">Carregando notícias…</li></ul>
+    </section>
+
+    <div id="quadros" class="quadros"></div>
+
+    <section class="quadro registros" aria-label="Registros">
       <nav class="abas" role="tablist">
         <button type="button" role="tab" data-aba="decisoes" aria-selected="true">Decisões</button>
         <button type="button" role="tab" data-aba="alertas">Alertas</button>
@@ -96,7 +99,7 @@
           <thead><tr><th>Data</th><th>Ativo</th><th>Lado</th><th class="dir">Preço</th><th class="dir">Qtd</th><th class="dir">Agora</th><th class="dir">Resultado</th><th>Motivo</th><th></th></tr></thead>
           <tbody></tbody>
         </table></div>
-        <p class="vazio" id="v-decisoes" hidden>Nenhuma decisão registrada. Use “Registrar compra” ou “Registrar venda” acima do gráfico.</p>
+        <p class="vazio" id="v-decisoes" hidden>Nenhuma decisão registrada. Escolha um ativo e use “Registrar compra” ou “Registrar venda” acima do gráfico.</p>
       </section>
 
       <section id="aba-alertas" class="aba" hidden>
@@ -124,7 +127,7 @@
           <tbody></tbody>
         </table></div>
         <p class="vazio" id="v-alertas" hidden>Nenhum alerta. Clique em “Criar alerta” para ser avisado por WhatsApp e e-mail.</p>
-        <p class="nota">Os alertas são checados a cada minuto no servidor, mesmo com o painel fechado. Alvo de preço avisa uma vez e desliga; variação e volume avisam no máximo uma vez por dia.</p>
+        <p class="nota">Os alertas são checados a cada minuto no servidor, mesmo com o painel fechado. Alvo de preço avisa uma vez e desliga. Variação e volume avisam no máximo uma vez por dia.</p>
       </section>
 
       <section id="aba-disparos" class="aba" hidden>
@@ -134,28 +137,30 @@
 
       <section id="aba-ativos" class="aba" hidden>
         <form id="form-ativo" class="form-linha">
-          <div class="campo"><label for="n-classe">Tipo</label>
+          <div class="campo"><label for="n-classe">Quadro</label>
             <select id="n-classe">
-              <option value="b3">Ação B3</option>
-              <option value="eua">EUA</option>
+              <option value="b3">Ações B3</option>
+              <option value="eua">Ações EUA</option>
               <option value="cripto">Cripto</option>
               <option value="cambio">Câmbio (par Binance)</option>
-              <option value="rendafixa">Renda fixa (série BCB)</option>
+              <option value="commodities">Commodities (futuro)</option>
+              <option value="treasury">Treasuries EUA</option>
+              <option value="rendafixa">Juros Brasil (série BCB)</option>
             </select></div>
           <div class="campo"><label for="n-simbolo">Código</label><input id="n-simbolo" placeholder="Ex.: MGLU3" required></div>
           <div class="campo" id="n-codigo-campo" hidden><label for="n-codigo">Nº da série BCB</label><input id="n-codigo" inputmode="numeric" placeholder="Ex.: 11"></div>
           <div class="campo campo-largo"><label for="n-nome">Nome</label><input id="n-nome" placeholder="Ex.: Magazine Luiza ON"></div>
           <div class="campo-botoes"><button type="submit" class="btn btn-primario">Adicionar</button></div>
         </form>
-        <p id="n-ajuda" class="nota">Ação da B3: digite o código (PETR4). EUA: o ticker (TSLA). Cripto: a sigla (ADA). Câmbio: o par da Binance (USDTBRL).</p>
+        <p class="nota">Ação da B3: o código (PETR4). EUA: o ticker (TSLA). Cripto: a sigla (ADA). Câmbio: o par da Binance (USDTBRL). Commodities: o código do futuro (NG para gás natural). Treasuries: o índice do Yahoo (TNX).</p>
         <ul id="l-ativos" class="ativos-lista"></ul>
       </section>
     </section>
   </main>
 
   <footer class="rodape">
-    Cripto e câmbio ao vivo pela Binance (câmbio via USDT). B3 e EUA com atraso de cerca de 15 minutos. Renda fixa: Banco Central, diário.
-    Painel de observação: nenhuma ordem é enviada.
+    Cripto e câmbio ao vivo pela Binance (câmbio via USDT). B3, EUA, commodities e Treasuries pelo Yahoo Finance, com atraso de cerca de 15 minutos.
+    Tesouro Direto: taxas do último fechamento (Tesouro Transparente). Indicadores: Banco Central e FRED. Painel de observação: nenhuma ordem é enviada.
   </footer>
 </div>
 

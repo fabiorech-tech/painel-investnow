@@ -62,7 +62,8 @@ async function cotacaoYahoo(a: Ativo): Promise<Cotacao> {
       simbolo: a.simbolo,
       preco,
       anterior,
-      variacao: preco != null && anterior ? ((preco - anterior) / anterior) * 100 : null,
+      // juros (Treasuries) variam em pontos percentuais; o resto em %
+      variacao: preco == null || !anterior ? null : a.classe === "rendafixa" || a.classe === "treasury" ? preco - anterior : ((preco - anterior) / anterior) * 100,
       volume: m.regularMarketVolume || hoje,
       volumeMedio: media(vols.slice(-21, -1)),
       hora: m.regularMarketTime ? m.regularMarketTime * 1000 : null,

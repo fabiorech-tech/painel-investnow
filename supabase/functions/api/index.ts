@@ -2,6 +2,7 @@
 // `x-codigo`. Usa a service role para ler e gravar nas tabelas (RLS sem políticas).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { type Ativo, cotacao, velas } from "./mercado.ts";
+import { indicadores, noticias, tesouro } from "./extras.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -57,6 +58,15 @@ async function tratar(acao: string, p: Record<string, unknown>) {
       return await Promise.all(lista.map(cotacao));
     }
 
+    case "indicadores":
+      return await indicadores();
+
+    case "tesouro":
+      return await tesouro();
+
+    case "noticias":
+      return await noticias();
+
     case "velas":
       return await velas(await ativo(texto(p.simbolo, 20)), texto(p.intervalo, 4) || "1d");
 
@@ -70,8 +80,10 @@ async function tratar(acao: string, p: Record<string, unknown>) {
       else if (classe === "cripto") { fonte = "binance"; codigo = simbolo.endsWith("USDT") ? simbolo : `${simbolo}USDT`; }
       else if (classe === "cambio") { fonte = "binance"; codigo = simbolo; }
       else if (classe === "rendafixa") { fonte = "bcb"; codigo = texto(p.codigo, 10); }
+      else if (classe === "treasury") { codigo = simbolo.startsWith("^") ? simbolo : `^${simbolo}`; }
+      else if (classe === "commodities") { codigo = simbolo.includes("=") ? simbolo : `${simbolo}=F`; }
       else if (classe !== "eua") throw new Error("Classe inválida");
-      const novo = { simbolo: simbolo.replace(/^\^/, "").replace(/USDT$/, "") || simbolo, nome: texto(p.nome, 60) || simbolo, classe, fonte, codigo, ordem: 200 };
+      const novo = { simbolo: simbolo.replace(/^\^/, "").replace(/USDT$/, "").replace(/=F$/, "") || simbolo, nome: texto(p.nome, 60) || simbolo, classe, fonte, codigo, ordem: 200 };
       const teste = await cotacao(novo as Ativo);
       if (teste.preco == null) throw new Error(`Não encontrei cotação para ${codigo}. Confira o código.`);
       const { error } = await db.from("ativos").insert(novo);
